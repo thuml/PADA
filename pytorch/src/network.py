@@ -1,0 +1,349 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torchvision
+from torchvision import models
+from torch.autograd import Variable
+
+class AdversarialLayer(torch.autograd.Function):
+  def __init__(self, high_value=1.0):
+    self.iter_num = 0
+    self.alpha = 10
+    self.low = 0.0
+    self.high = high_value
+    self.max_iter = 10000.0
+    
+  def forward(self, input):
+    self.iter_num += 1
+    output = input * 1.0
+    return output
+
+  def backward(self, gradOutput):
+    self.coeff = np.float(2.0 * (self.high - self.low) / (1.0 + np.exp(-self.alpha*self.iter_num / self.max_iter)) - (self.high - self.low) + self.low)
+    return -self.coeff * gradOutput
+
+class SilenceLayer(torch.autograd.Function):
+  def __init__(self):
+    pass
+  def forward(self, input):
+    return input * 1.0
+
+  def backward(self, gradOutput):
+    return 0 * gradOutput
+
+
+# convnet without the last layer
+class AlexNetFc(nn.Module):
+  def __init__(self, use_bottleneck=True, bottleneck_dim=256):
+    super(AlexNetFc, self).__init__()
+    model_alexnet = models.alexnet(pretrained=True)
+    self.features = model_alexnet.features
+    self.classifier = nn.Sequential()
+    for i in range(6):
+      self.classifier.add_module("classifier"+str(i), model_alexnet.classifier[i])
+    self.use_bottleneck = use_bottleneck
+
+    if use_bottleneck:
+        self.bottleneck_layer = nn.Linear(model_alexnet.classifier[6].in_features, bottleneck_dim)
+        self.bottleneck_layer.weight.data.normal_(0, 0.005)
+        self.bottleneck_layer.bias.data.fill_(0.1)
+        self.__in_features = bottleneck_dim
+    else:
+        self.__in_features = model_alexnet.classifier[6].in_features
+  
+  def forward(self, x):
+    x = self.features(x)
+    x = x.view(x.size(0), 256*6*6)
+    x = self.classifier(x)
+    if self.use_bottleneck:
+        x = self.bottleneck_layer(x)
+    return x
+
+  def output_num(self):
+    return self.__in_features
+
+class ResNet18Fc(nn.Module):
+  def __init__(self, use_bottleneck, bottleneck_dim):
+    super(ResNet18Fc, self).__init__()
+    model_resnet18 = models.resnet18(pretrained=True)
+    self.conv1 = model_resnet18.conv1
+    self.bn1 = model_resnet18.bn1
+    self.relu = model_resnet18.relu
+    self.maxpool = model_resnet18.maxpool
+    self.layer1 = model_resnet18.layer1
+    self.layer2 = model_resnet18.layer2
+    self.layer3 = model_resnet18.layer3
+    self.layer4 = model_resnet18.layer4
+    self.avgpool = model_resnet18.avgpool
+    self.use_bottleneck = use_bottleneck
+
+    if use_bottleneck:
+        self.bottleneck_layer = nn.Linear(model_resnet18.fc.in_features, bottleneck_dim)
+        self.bottleneck_layer.weight.data.normal_(0, 0.005)
+        self.bottleneck_layer.bias.data.fill_(0.1)
+        self.__in_features = bottleneck_dim
+    else:
+        self.__in_features = model_resnet18.fc.in_features
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.bn1(x)
+    x = self.relu(x)
+    x = self.maxpool(x)
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.layer4(x)
+    x = self.avgpool(x)
+    x = x.view(x.size(0), -1)
+    if self.use_bottleneck:
+        x = self.bottleneck_layer(x)
+    return x
+
+  def output_num(self):
+    return self.__in_features
+
+class ResNet34Fc(nn.Module):
+  def __init__(self, use_bottleneck, bottleneck_dim):
+    super(ResNet34Fc, self).__init__()
+    model_resnet34 = models.resnet34(pretrained=True)
+    self.conv1 = model_resnet34.conv1
+    self.bn1 = model_resnet34.bn1
+    self.relu = model_resnet34.relu
+    self.maxpool = model_resnet34.maxpool
+    self.layer1 = model_resnet34.layer1
+    self.layer2 = model_resnet34.layer2
+    self.layer3 = model_resnet34.layer3
+    self.layer4 = model_resnet34.layer4
+    self.avgpool = model_resnet34.avgpool
+    self.use_bottleneck = use_bottleneck
+
+    if use_bottleneck:
+        self.bottleneck_layer = nn.Linear(model_resnet34.fc.in_features, bottleneck_dim)
+        self.bottleneck_layer.weight.data.normal_(0, 0.005)
+        self.bottleneck_layer.bias.data.fill_(0.1)
+        self.__in_features = bottleneck_dim
+    else:
+        self.__in_features = model_resnet34.fc.in_features
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.bn1(x)
+    x = self.relu(x)
+    x = self.maxpool(x)
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.layer4(x)
+    x = self.avgpool(x)
+    x = x.view(x.size(0), -1)
+    if self.use_bottleneck:
+        x = self.bottleneck_layer(x)
+    return x
+
+  def output_num(self):
+    return self.__in_features
+
+class ResNet50Fc(nn.Module):
+  def __init__(self, use_bottleneck=True, new_cls=False, class_num=1000):
+    super(ResNet50Fc, self).__init__()
+    model_resnet50 = models.resnet50(pretrained=True)
+    self.conv1 = model_resnet50.conv1
+    self.bn1 = model_resnet50.bn1
+    self.relu = model_resnet50.relu
+    self.maxpool = model_resnet50.maxpool
+    self.layer1 = model_resnet50.layer1
+    self.layer2 = model_resnet50.layer2
+    self.layer3 = model_resnet50.layer3
+    self.layer4 = model_resnet50.layer4
+    self.avgpool = model_resnet50.avgpool
+    self.feature_layers = nn.Sequential(self.conv1, self.bn1, self.relu, self.maxpool, \
+                         self.layer1, self.layer2, self.layer3, self.layer4, self.avgpool)
+
+    self.use_bottleneck = use_bottleneck
+    self.new_cls = new_cls
+    if new_cls:
+        if self.use_bottleneck:
+            self.bottleneck = nn.Linear(model_resnet50.fc.in_features, 256)
+            self.bottleneck.weight.data.normal_(0, 0.005)
+            self.bottleneck.bias.data.fill_(0.0)
+            self.fc = nn.Linear(256, class_num)
+            self.fc.weight.data.normal_(0, 0.01)
+            self.fc.bias.data.fill_(0.0)
+        else:
+            self.fc = nn.Linear(model_resnet50.fc.in_features, class_num)
+            self.fc.weight.data.normal_(0, 0.01)
+            self.fc.bias.data.fill_(0.0)
+        self.__in_features = 256
+    else:
+        self.fc = model_resnet50.fc
+        self.__in_features = model_resnet50.fc.in_features
+
+  def forward(self, x):
+    x = self.feature_layers(x)
+    x = x.view(x.size(0), -1)
+    if self.use_bottleneck and self.new_cls:
+        x = self.bottleneck(x)
+    y = self.fc(x)
+    return x, y
+
+  def output_num(self):
+    return self.__in_features
+
+class ResNet101Fc(nn.Module):
+  def __init__(self, use_bottleneck, bottleneck_dim):
+    super(ResNet101Fc, self).__init__()
+    model_resnet101 = models.resnet101(pretrained=True)
+    self.conv1 = model_resnet101.conv1
+    self.bn1 = model_resnet101.bn1
+    self.relu = model_resnet101.relu
+    self.maxpool = model_resnet101.maxpool
+    self.layer1 = model_resnet101.layer1
+    self.layer2 = model_resnet101.layer2
+    self.layer3 = model_resnet101.layer3
+    self.layer4 = model_resnet101.layer4
+    self.avgpool = model_resnet101.avgpool
+    self.use_bottleneck = use_bottleneck
+
+    if use_bottleneck:
+        self.bottleneck_layer = nn.Linear(model_resnet101.fc.in_features, bottleneck_dim)
+        self.bottleneck_layer.weight.data.normal_(0, 0.005)
+        self.bottleneck_layer.bias.data.fill_(0.1)
+        self.__in_features = bottleneck_dim
+    else:
+        self.__in_features = model_resnet101.fc.in_features
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.bn1(x)
+    x = self.relu(x)
+    x = self.maxpool(x)
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.layer4(x)
+    x = self.avgpool(x)
+    x = x.view(x.size(0), -1)
+    if self.use_bottleneck:
+        x = self.bottleneck_layer(x)
+    return x
+
+  def output_num(self):
+    return self.__in_features
+
+
+class ResNet152Fc(nn.Module):
+  def __init__(self, use_bottleneck, bottleneck_dim):
+    super(ResNet152Fc, self).__init__()
+    model_resnet152 = models.resnet152(pretrained=True)
+    self.conv1 = model_resnet152.conv1
+    self.bn1 = model_resnet152.bn1
+    self.relu = model_resnet152.relu
+    self.maxpool = model_resnet152.maxpool
+    self.layer1 = model_resnet152.layer1
+    self.layer2 = model_resnet152.layer2
+    self.layer3 = model_resnet152.layer3
+    self.layer4 = model_resnet152.layer4
+    self.avgpool = model_resnet152.avgpool
+    self.use_bottleneck = use_bottleneck
+
+    if use_bottleneck:
+        self.bottleneck_layer = nn.Linear(model_resnet152.fc.in_features, bottleneck_dim)
+        self.bottleneck_layer.weight.data.normal_(0, 0.005)
+        self.bottleneck_layer.bias.data.fill_(0.1)
+        self.__in_features = bottleneck_dim
+    else:
+        self.__in_features = model_resnet152.fc.in_features
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.bn1(x)
+    x = self.relu(x)
+    x = self.maxpool(x)
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.layer4(x)
+    x = self.avgpool(x)
+    x = x.view(x.size(0), -1)
+    if self.use_bottleneck:
+        x = self.bottleneck_layer(x)
+    return x
+
+  def output_num(self):
+    return self.__in_features
+
+class AdversarialNetwork(nn.Module):
+  def __init__(self, in_feature):
+    super(AdversarialNetwork, self).__init__()
+    self.ad_layer1 = nn.Linear(in_feature, 1024)
+    self.ad_layer2 = nn.Linear(1024,1024)
+    self.ad_layer3 = nn.Linear(1024, 1)
+    self.ad_layer1.weight.data.normal_(0, 0.01)
+    self.ad_layer2.weight.data.normal_(0, 0.01)
+    self.ad_layer3.weight.data.normal_(0, 0.3)
+    self.ad_layer1.bias.data.fill_(0.0)
+    self.ad_layer2.bias.data.fill_(0.0)
+    self.ad_layer3.bias.data.fill_(0.0)
+    self.relu1 = nn.ReLU()
+    self.relu2 = nn.ReLU()
+    self.dropout1 = nn.Dropout(0.5)
+    self.dropout2 = nn.Dropout(0.5)
+    self.sigmoid = nn.Sigmoid()
+
+  def forward(self, x):
+    x = self.ad_layer1(x)
+    x = self.relu1(x)
+    x = self.dropout1(x)
+    x = self.ad_layer2(x)
+    x = self.relu2(x)
+    x = self.dropout2(x)
+    x = self.ad_layer3(x)
+    x = self.sigmoid(x)
+    return x
+
+  def output_num(self):
+    return 1
+
+class SmallAdversarialNetwork(nn.Module):
+  def __init__(self, in_feature):
+    super(SmallAdversarialNetwork, self).__init__()
+    self.ad_layer1 = nn.Linear(in_feature, 256)
+    self.ad_layer2 = nn.Linear(256, 1)
+    self.ad_layer1.weight.data.normal_(0, 0.01)
+    self.ad_layer2.weight.data.normal_(0, 0.01)
+    self.ad_layer1.bias.data.fill_(0.0)
+    self.ad_layer2.bias.data.fill_(0.0)
+    self.relu1 = nn.ReLU()
+    self.dropout1 = nn.Dropout(0.5)
+    self.sigmoid = nn.Sigmoid()
+
+  def forward(self, x):
+    x = self.ad_layer1(x)
+    x = self.relu1(x)
+    x = self.dropout1(x)
+    x = self.ad_layer2(x)
+    x = self.sigmoid(x)
+    return x
+
+  def output_num(self):
+    return 1
+
+class LittleAdversarialNetwork(nn.Module):
+  def __init__(self, in_feature):
+    super(LittleAdversarialNetwork, self).__init__()
+    self.ad_layer1 = nn.Linear(in_feature, 1)
+    self.ad_layer1.weight.data.normal_(0, 0.01)
+    self.ad_layer1.bias.data.fill_(0.0)
+    self.sigmoid = nn.Sigmoid()
+
+  def forward(self, x):
+    x = self.ad_layer1(x)
+    x = self.sigmoid(x)
+    return x
+
+  def output_num(self):
+    return 1
+
+
+network_dict = {"AlexNet":AlexNetFc, "ResNet18":ResNet18Fc, "ResNet34":ResNet34Fc, "ResNet50":ResNet50Fc, "ResNet101":ResNet101Fc, "ResNet152":ResNet152Fc}

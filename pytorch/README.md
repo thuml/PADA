@@ -27,7 +27,7 @@ First, you can manually download the PyTorch pre-trained model introduced in `to
 Then, you can train the model for each dataset using the followling command.
 ```
 cd src
-python train_pada.py --gpu_id 2 --net ResNet50 --dset imagenet --s_dset_path ../data/imagenet-caltech/imagenet_1000_list.txt --t_dset_path ../data/imagenet-caltech/caltech_84_list.txt --test_interval 500 --snapshot_interval 5000 --output_dir san
+python train_pada.py --gpu_id 2 --net ResNet50 --dset office --s_dset_path ../data/office/webcam_31_list.txt --t_dset_path ../data/office/amazon_10_list.txt --test_interval 500 --snapshot_interval 5000 --output_dir san
 ```
 You can set the command parameters to switch between different experiments. 
 - "gpu_id" is the GPU ID to run experiments.

@@ -35,22 +35,15 @@ def image_classification_predict(loader, model, test_10crop=True, gpu=True, soft
                     inputs[j] = Variable(inputs[j])
                 labels = Variable(labels)
             outputs = []
-            for j in range(9):
+            for j in range(10):
                 _, predict_out = model(inputs[j])
                 outputs.append(nn.Softmax(dim=1)(softmax_param * predict_out))
-            _, outputs_center = model(inputs[9])
-            outputs.append(nn.Softmax(dim=1)(softmax_param * outputs_center))
             softmax_outputs = sum(outputs)
-            outputs = outputs_center
             if start_test:
-                all_output = outputs.data.float()
                 all_softmax_output = softmax_outputs.data.cpu().float()
-                all_label = labels.data.float()
                 start_test = False
             else:
-                all_output = torch.cat((all_output, outputs.data.float()), 0)
                 all_softmax_output = torch.cat((all_softmax_output, softmax_outputs.data.cpu().float()), 0)
-                all_label = torch.cat((all_label, labels.data.float()), 0)
     else:
         iter_val = iter(loader["test"])
         for i in range(len(loader['test'])):
@@ -63,16 +56,11 @@ def image_classification_predict(loader, model, test_10crop=True, gpu=True, soft
             _, outputs = model(inputs)
             softmax_outputs = nn.Softmax(dim=1)(softmax_param * outputs)
             if start_test:
-                all_output = outputs.data.cpu().float()
                 all_softmax_output = softmax_outputs.data.cpu().float()
-                all_label = labels.data.float()
                 start_test = False
             else:
-                all_output = torch.cat((all_output, outputs.data.cpu().float()), 0)
                 all_softmax_output = torch.cat((all_softmax_output, softmax_outputs.data.cpu().float()), 0)
-                all_label = torch.cat((all_label, labels.data.float()), 0)
-    _, predict = torch.max(all_output, 1)
-    return all_softmax_output, predict, all_output, all_label
+    return all_softmax_output
 
 def image_classification_test(loader, model, test_10crop=True, gpu=True, iter_num=-1):
     start_test = True
@@ -192,11 +180,11 @@ def train(config):
                                 batch_size=data_config["test"]["batch_size"], \
                                 shuffle=False, num_workers=4)
 
-    class_num = config["class_num"]
+    class_num = config["network"]["params"]["class_num"]
 
     ## set base network
     net_config = config["network"]
-    base_network = network.network_dict[net_config["name"]](use_bottleneck=net_config["use_bottleneck"], new_cls=net_config["new_cls"], class_num=class_num)
+    base_network = net_config["name"](**net_config["params"])
 
 
     use_gpu = torch.cuda.is_available()
@@ -204,8 +192,8 @@ def train(config):
         base_network = base_network.cuda()
 
     ## collect parameters
-    if net_config["new_cls"]:
-        if net_config["use_bottleneck"]:
+    if net_config["params"]["new_cls"]:
+        if net_config["params"]["use_bottleneck"]:
             parameter_list = [{"params":base_network.feature_layers.parameters(), "lr":1}, \
                             {"params":base_network.bottleneck.parameters(), "lr":10}, \
                             {"params":base_network.fc.parameters(), "lr":10}]
@@ -260,9 +248,9 @@ def train(config):
                 "iter_{:05d}_model.pth.tar".format(i)))
                     
        
-        if (i % loss_params["update_iter"] == loss_params["update_iter"] - 1) and (i > loss_params["start_iter"]):
+        if i % loss_params["update_iter"] == loss_params["update_iter"] - 1:
             base_network.train(False)
-            target_fc8_out, _, target_before_softmax, target_label = image_classification_predict(dset_loaders, base_network, softmax_param=1.0)
+            target_fc8_out = image_classification_predict(dset_loaders, base_network, softmax_param=1.0)
             class_weight = torch.mean(target_fc8_out, 0)
             class_weight = (class_weight / torch.mean(class_weight)).cuda().view(-1)
             class_criterion = nn.CrossEntropyLoss(weight = class_weight)
@@ -311,18 +299,24 @@ def train(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Transfer Learning')
-    parser.add_argument('gpu_id', type=str, nargs='?', default='0', help="device id to run")
+    parser.add_argument('--gpu_id', type=str, nargs='?', default='0', help="device id to run")
+    parser.add_argument('--net', type=str, default='ResNet50', help="Options: ResNet18,34,50,101,152; AlexNet")
+    parser.add_argument('--dset', type=str, default='office', help="The dataset or source dataset used")
+    parser.add_argument('--s_dset_path', type=str, default='../data/office/amazon_31_list.txt', help="The source dataset path list")
+    parser.add_argument('--t_dset_path', type=str, default='../data/office/webcam_10_list.txt', help="The target dataset path list")
+    parser.add_argument('--test_interval', type=int, default=500, help="interval of two continuous test phase")
+    parser.add_argument('--snapshot_interval', type=int, default=5000, help="interval of two continuous output model")
+    parser.add_argument('--output_dir', type=str, default='san', help="output directory of our model (in ../snapshot directory)")
     args = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id 
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
     # train config
-    
     config = {}
     config["num_iterations"] = 50004
-    config["test_interval"] = 500
-    config["snapshot_interval"] = 10000
+    config["test_interval"] = args.test_interval
+    config["snapshot_interval"] = args.snapshot_interval
     config["output_for_test"] = True
-    config["output_path"] = "../snapshot/no"
+    config["output_path"] = "../snapshot/" + args.output_dir
     if not osp.exists(config["output_path"]):
         os.mkdir(config["output_path"])
     config["out_file"] = open(osp.join(config["output_path"], "log.txt"), "w")
@@ -330,21 +324,24 @@ if __name__ == "__main__":
         os.mkdir(config["output_path"])
 
     config["prep"] = {"test_10crop":True, "resize_size":256, "crop_size":224}
-    config["loss"] = {"trade_off":1.0, "update_iter":500, "start_iter":-1}
-    config["network"] = {"name":"ResNet50", "use_bottleneck":True, "bottleneck_dim":256, "new_cls":True}
+    config["loss"] = {"trade_off":1.0, "update_iter":500}
+    if "AlexNet" in args.net:
+        config["network"] = {"name":network.AlexNetFc, "params":{"use_bottleneck":True, "bottleneck_dim":256, "new_cls":True} }
+    if "ResNet" in args.net:
+        config["network"] = {"name":network.ResNetFc, "params":{"resnet_name":args.net, "use_bottleneck":True, "bottleneck_dim":256, "new_cls":True} }
     config["optimizer"] = {"type":"SGD", "optim_params":{"lr":1.0, "momentum":0.9, \
                            "weight_decay":0.0005, "nesterov":True}, "lr_type":"inv", \
                            "lr_param":{"init_lr":0.001, "gamma":0.001, "power":0.75} }
 
-    config["dataset"] = "office"
+    config["dataset"] = args.dset
     if config["dataset"] == "office":
-        config["data"] = {"source":{"list_path":"../data/office/dslr_31_list.txt", "batch_size":36}, \
-                          "target":{"list_path":"../data/office/amazon_10_list.txt", "batch_size":36}, \
-                          "test":{"list_path":"../data/office/amazon_10_list.txt", "batch_size":4}}
+        config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
+                          "target":{"list_path":args.t_dset_path, "batch_size":36}, \
+                          "test":{"list_path":args.t_dset_path, "batch_size":4}}
         if "amazon" in config["data"]["test"]["list_path"]:
             config["optimizer"]["lr_param"]["init_lr"] = 0.0003
         else:
             config["optimizer"]["lr_param"]["init_lr"] = 0.001
         config["loss"]["update_iter"] = 500
-        config["class_num"] = 31
+        config["network"]["params"]["class_num"] = 31
     print(train(config))

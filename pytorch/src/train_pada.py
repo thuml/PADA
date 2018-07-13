@@ -344,4 +344,27 @@ if __name__ == "__main__":
             config["optimizer"]["lr_param"]["init_lr"] = 0.001
         config["loss"]["update_iter"] = 500
         config["network"]["params"]["class_num"] = 31
+    elif config["dataset"] == "office-home":
+        config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
+                          "target":{"list_path":args.t_dset_path, "batch_size":36}, \
+                          "test":{"list_path":args.t_dset_path, "batch_size":4}}
+        config["optimizer"]["lr_param"]["init_lr"] = 0.001
+        config["loss"]["update_iter"] = 2000
+        config["network"]["params"]["class_num"] = 65
+    elif config["dataset"] == "imagenet":
+        config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
+                          "target":{"list_path":args.t_dset_path, "batch_size":36}, \
+                          "test":{"list_path":args.t_dset_path, "batch_size":4}}
+        config["optimizer"]["lr_param"]["init_lr"] = 0.0003
+        config["loss"]["update_iter"] = 2000
+        config["network"]["params"]["use_bottleneck"] = False
+        config["network"]["params"]["new_cls"] = False
+        config["network"]["params"]["class_num"] = 1000
+    elif config["dataset"] == "caltech":
+        config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
+                          "target":{"list_path":args.t_dset_path, "batch_size":36}, \
+                          "test":{"list_path":args.t_dset_path, "batch_size":4}}
+        config["optimizer"]["lr_param"]["init_lr"] = 0.001
+        config["loss"]["update_iter"] = 500
+        config["network"]["params"]["class_num"] = 256
     print(train(config))

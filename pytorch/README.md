@@ -15,6 +15,8 @@ The lists of dataset are in [data](./data) directory. The "data/imagenet-caltech
 
 For Office-31 dataset, "name_31_list.txt"(name="amazon", "webcam", "dslr") is the source list file and "name_10_list.txt" is the target list file.
 
+For Office-Home dataset, "name.txt"(name="Art", "Clipart", "Product", "Real_World") is the source list file and "name_shared.txt" is the target list file.
+
 For ImageNet-Caltech dataset, "imagenet_1000_list.txt" is the source file list for task "I->C" and "caltech_84_list.txt" is the target file list. "caltech_256_list.txt" is the source file list for task "C->I" and "imagenet_val_84_list.txt" is the target file list.
 
 You can also modify the list file(txt format) in ./data as you like. Each line in the list file follows the following format:
@@ -31,16 +33,13 @@ python train_pada.py --gpu_id 2 --net ResNet50 --dset office --s_dset_path ../da
 ```
 You can set the command parameters to switch between different experiments. 
 - "gpu_id" is the GPU ID to run experiments.
-- "dset" parameter is the dataset selection. In our experiments, it can be "office" (for all the Office-31 tasks), "imagenet" (for task ImageNet->Caltech) and "caltech" (for Caltech->ImageNet).
+- "dset" parameter is the dataset selection. In our experiments, it can be "office" (for all the Office-31 tasks), "office-home" (for all the Office-Home tasks), "imagenet" (for task ImageNet->Caltech) and "caltech" (for Caltech->ImageNet).
 - "s_dset_path" is the source dataset list.
 - "t_dset_path" is the target dataset list.
 - "test_interval" is the interval of iterations between two test phase.
 - "snapshot_interval" is the interval of iterations between two snapshot models.
 - "output_dir" is the output directory of the log and snapshot.
 - "net" sets the base network. For details of setting, you can see network.py.
-    - For AlexNet, "net" is AlexNet.    
+    - For AlexNet, "net" is AlexNet.
+    - For VGG, "net" is like VGG16. Detail names are in network.py.
     - For ResNet, "net" is like ResNet50. Detail names are in network.py.
-
-## Notifications
-- The performance on the AlexNet is a little different from the performance on the paper since the AlexNet on PyTorch is different from that on the Caffe framework.
-- train_san_w_t.py modifies the original weighting mechanism in the original SAN paper which is proved to be more stable than the original version. We calculate the weight on the whole target dataset with a interval of iterations, which is represented by the "update_iter" parameter in the python file.

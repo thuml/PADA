@@ -60,7 +60,7 @@ class AlexNetFc(nn.Module):
             self.fc.bias.data.fill_(0.0)
             self.__in_features = 4096
     else:
-        self.fc = model_resnet.fc
+        self.fc = model_alexnet.classifier[6]
         self.__in_features = 4096
 
   def forward(self, x):
@@ -125,6 +125,48 @@ class ResNetFc(nn.Module):
   def output_num(self):
     return self.__in_features
 
+vgg_dict = {"VGG11":models.vgg11, "VGG13":models.vgg13, "VGG16":models.vgg16, "VGG19":models.vgg19, "VGG11BN":models.vgg11_bn, "VGG13BN":models.vgg13_bn, "VGG16BN":models.vgg16_bn, "VGG19BN":models.vgg19_bn} 
+class VGGFc(nn.Module):
+  def __init__(self, vgg_name, use_bottleneck=True, bottleneck_dim=256, new_cls=False, class_num=1000):
+    super(VGGFc, self).__init__()
+    model_vgg = vgg_dict[vgg_name](pretrained=True)
+    self.features = model_vgg.features
+    self.classifier = nn.Sequential()
+    for i in range(6):
+        self.classifier.add_module("classifier"+str(i), model_vgg.classifier[i])
+    self.feature_layers = nn.Sequential(self.features, self.classifier)
+
+    self.use_bottleneck = use_bottleneck
+    self.new_cls = new_cls
+    if new_cls:
+        if self.use_bottleneck:
+            self.bottleneck = nn.Linear(4096, bottleneck_dim)
+            self.bottleneck.weight.data.normal_(0, 0.005)
+            self.bottleneck.bias.data.fill_(0.0)
+            self.fc = nn.Linear(bottleneck_dim, class_num)
+            self.fc.weight.data.normal_(0, 0.01)
+            self.fc.bias.data.fill_(0.0)
+            self.__in_features = bottleneck_dim
+        else:
+            self.fc = nn.Linear(4096, class_num)
+            self.fc.weight.data.normal_(0, 0.01)
+            self.fc.bias.data.fill_(0.0)
+            self.__in_features = 4096
+    else:
+        self.fc = model_vgg.classifier[6]
+        self.__in_features = 4096
+
+  def forward(self, x):
+    x = self.features(x)
+    x = x.view(x.size(0), 25088)
+    x = self.classifier(x)
+    if self.use_bottleneck and self.new_cls:
+        x = self.bottleneck(x)
+    y = self.fc(x)
+    return x, y
+
+  def output_num(self):
+    return self.__in_features
 
 class AdversarialNetwork(nn.Module):
   def __init__(self, in_feature):

@@ -208,7 +208,7 @@ def train(config):
     if use_gpu:
         class_weight = class_weight.cuda()
     ad_net = network.AdversarialNetwork(base_network.output_num())
-    gradient_reverse_layer = network.AdversarialLayer()
+    gradient_reverse_layer = network.AdversarialLayer(high_value=config["high"])
     if use_gpu:
         ad_net = ad_net.cuda()
     parameter_list.append({"params":ad_net.parameters(), "lr":10})
@@ -250,7 +250,7 @@ def train(config):
        
         if i % loss_params["update_iter"] == loss_params["update_iter"] - 1:
             base_network.train(False)
-            target_fc8_out = image_classification_predict(dset_loaders, base_network, softmax_param=1.0)
+            target_fc8_out = image_classification_predict(dset_loaders, base_network, softmax_param=config["softmax_param"])
             class_weight = torch.mean(target_fc8_out, 0)
             class_weight = (class_weight / torch.mean(class_weight)).cuda().view(-1)
             class_criterion = nn.CrossEntropyLoss(weight = class_weight)
@@ -312,7 +312,9 @@ if __name__ == "__main__":
 
     # train config
     config = {}
-    config["num_iterations"] = 50004
+    config["softmax_param"] = 1.0
+    config["high"] = 1.0
+    config["num_iterations"] = 12004
     config["test_interval"] = args.test_interval
     config["snapshot_interval"] = args.snapshot_interval
     config["output_for_test"] = True
@@ -353,8 +355,34 @@ if __name__ == "__main__":
         config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
                           "target":{"list_path":args.t_dset_path, "batch_size":36}, \
                           "test":{"list_path":args.t_dset_path, "batch_size":4}}
-        config["optimizer"]["lr_param"]["init_lr"] = 0.001
-        config["loss"]["update_iter"] = 2000
+        if "Real_World" in args.s_dset_path and "Art" in args.t_dset_path:
+            config["softmax_param"] = 1.0
+            config["optimizer"]["lr_param"]["init_lr"] = 0.0003
+        elif "Real_World" in args.s_dset_path:
+            config["softmax_param"] = 10.0
+            config["optimizer"]["lr_param"]["init_lr"] = 0.001
+        elif "Art" in args.s_dset_path:
+            config["optimizer"]["lr_param"]["init_lr"] = 0.0003
+            config["high"] = 0.5
+            config["softmax_param"] = 10.0
+            if "Real_World" in args.t_dset_path:
+                config["high"] = 0.25
+        elif "Product" in args.s_dset_path:
+            config["optimizer"]["lr_param"]["init_lr"] = 0.0003
+            config["high"] = 0.5
+            config["softmax_param"] = 10.0
+            if "Real_World" in args.t_dset_path:
+                config["high"] = 0.3
+        else:
+            config["optimizer"]["lr_param"]["init_lr"] = 0.0003
+            if "Real_World" in args.t_dset_path:
+                config["high"] = 0.5
+                config["softmax_param"] = 10.0
+                config["loss"]["update_iter"] = 1000
+            else:
+                config["high"] = 0.5
+                config["softmax_param"] = 10.0
+                config["loss"]["update_iter"] = 500
         config["network"]["params"]["class_num"] = 65
     elif config["dataset"] == "imagenet":
         config["data"] = {"source":{"list_path":args.s_dset_path, "batch_size":36}, \
@@ -372,4 +400,4 @@ if __name__ == "__main__":
         config["optimizer"]["lr_param"]["init_lr"] = 0.001
         config["loss"]["update_iter"] = 500
         config["network"]["params"]["class_num"] = 256
-    print(train(config))
+    train(config)
